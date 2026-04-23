@@ -1,0 +1,31 @@
+node_modules/
+dist/
+build/
+.next/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage/
+.cache/
+.parcel-cache/
+.turbo/
+*.tsbuildinfo
+
+# Python (bootstrap scripts)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# HF dataset local cache
+.sibyl-cache/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
