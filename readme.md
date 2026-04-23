@@ -24,7 +24,7 @@ See [`docs/design.md`](./docs/design.md) for the full design document — archit
 
 ## Relationship to adjacent projects
 
-- **[convergence-investigation](https://github.com/peterpodj/convergence-investigation-praxis)** — the offline research pipeline that populates SIBYL's strategy dataset. SIBYL is a *consumer* of convergence's output format and a *producer* of miss-logs that drive subsequent convergence runs.
+- **[convergence-investigation]([https://github.com/peterpodj/convergence]))** — the offline research pipeline that populates SIBYL's strategy dataset. SIBYL is a *consumer* of convergence's output format and a *producer* of miss-logs that drive subsequent convergence runs.
 - **[G0DM0D3](https://github.com/elder-plinius/G0DM0D3)** — the host application SIBYL integrates into. G0DM0D3 provides the multi-model race infrastructure, HF dataset read/write plumbing, and telemetry pipeline SIBYL reuses.
 - **[L1B3RT4S](https://github.com/elder-plinius/L1B3RT4S) / CL4R1T4S** — source corpora for the initial convergence bootstrap investigation.
 
