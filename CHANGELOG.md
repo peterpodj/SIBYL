@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### SIBYL v0.1 executed against local G0DM0D3-main (2026-04-23)
+
+The v0.1 implementation plan was executed against the local
+`G0DM0D3-main` working copy (imported from zip). Branch
+`sibyl-v0.1` contains 12 commits (11 implementation + 1
+handoff).
+
+- Baseline parent: `eb7fa88` (vendor baseline import)
+- Branch tip: `cd9d61a` (handoff CLAUDE.md)
+- Push status: **deferred** — no remote configured for
+  `G0DM0D3-main`. See `G0DM0D3-main/CLAUDE.md` in that
+  working copy for remote-decision options.
+
+### Runtime deviations from the v0.1 plan
+
+| Plan | Applied | Why |
+|---|---|---|
+| `POST /api/analyze` | `POST /v1/analyze` | Matches G0DM0D3's existing `/v1/*` route convention |
+| `tierGate('standard')` | `tierGate('research:read')` | `tierGate()` takes `GateCheck`, not tier name |
+| `x-api-key` test header | `Authorization: Bearer` | Real `apiKeyAuth` middleware expects Bearer |
+| Plan's default jurors | G0DM0D3 FAST-tier (gemini-2.5-flash, deepseek-chat, llama-3.1-8b-instruct, mistral-small-3.2-24b-instruct, gpt-oss-20b) | Canonical juror pool for this codebase |
+
+None of these affect the design architecture; they are
+mapping-to-reality adjustments that should be back-ported
+to the design doc (§3 architecture + §8.1 route spec) in a
+follow-up patch.
+
+### File inventory added on `sibyl-v0.1`
+
+- `api/lib/sibyl/{s-class,types,tension,prompt,classifier,strategies-db,index}.ts`
+- `api/routes/analyze.ts`
+- `api/lib/metadata.ts` extended (MetadataEvent.sibyl?, mode union +'analyze')
+- `api/server.ts` extended (mount `/v1/analyze`)
+- `api/.env.example` created (all env vars documented)
+- `test.js` (TDD tension unit + /v1/analyze E2E)
+- `CLAUDE.md` (handoff note + remote-decision documentation)
+- `@huggingface/hub` added to dependencies
+
+
 ### Added
 - Design specification (`docs/design.md`) — Sibylline Strategy Router for LLM Interaction
 - Architecture: classifier self-jury + HF-dataset-backed strategies DB + miss-log feedback
