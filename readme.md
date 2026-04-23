@@ -4,7 +4,7 @@
 
 SIBYL is a classifier-and-strategy-lookup service for LLM interaction. It reads an incoming user request, consults a panel of lightweight language models ("the jury"), scores their disagreement as a **tension metric**, and returns ranked interaction strategies — prompt templates, model+prompt combos, or full multi-stage pipelines — drawn from a research-authored dataset.
 
-The strategy dataset is built offline by the [convergence-investigation]([https://github.com/peterpodj/convergence]) research methodology over a corpus of published system prompts, jailbreak archives, and red-team literature. Misses — requests the classifier cannot confidently place — are logged as coverage gaps and become the input to the next convergence re-investigation.
+The strategy dataset is built offline by the [convergence-investigation](https://github.com/peterpodj/convergence) research methodology over a corpus of published system prompts, jailbreak archives, and red-team literature. Misses — requests the classifier cannot confidently place — are logged as coverage gaps and become the input to the next convergence re-investigation.
 
 ## Status
 
@@ -16,7 +16,7 @@ See [`docs/design.md`](./docs/design.md) for the full design document — archit
 
 | Concept | Source |
 |---|---|
-| S-class taxonomy | [convergence-investigation](https://github.com/peterpodj/convergence-investigation-praxis) (WFGY S-class vocabulary) |
+| S-class taxonomy | [convergence-investigation](https://github.com/peterpodj/convergence) (WFGY S-class vocabulary) |
 | Tension scoring (0.00–1.00, 4-tier) | convergence-investigation (`bridge-figures.md`) |
 | Self-jury classifier | Novel (this repo) |
 | Strategy DB format | Novel (discriminated union of `prompt_only \| combo \| pipeline`) |
@@ -24,7 +24,7 @@ See [`docs/design.md`](./docs/design.md) for the full design document — archit
 
 ## Relationship to adjacent projects
 
-- **[convergence-investigation]([https://github.com/peterpodj/convergence]))** — the offline research pipeline that populates SIBYL's strategy dataset. SIBYL is a *consumer* of convergence's output format and a *producer* of miss-logs that drive subsequent convergence runs.
+- **[convergence-investigation](https://github.com/peterpodj/convergence)** — the offline research pipeline that populates SIBYL's strategy dataset. SIBYL is a *consumer* of convergence's output format and a *producer* of miss-logs that drive subsequent convergence runs.
 - **[G0DM0D3](https://github.com/elder-plinius/G0DM0D3)** — the host application SIBYL integrates into. G0DM0D3 provides the multi-model race infrastructure, HF dataset read/write plumbing, and telemetry pipeline SIBYL reuses.
 - **[L1B3RT4S](https://github.com/elder-plinius/L1B3RT4S) / CL4R1T4S** — source corpora for the initial convergence bootstrap investigation.
 
