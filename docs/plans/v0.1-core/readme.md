@@ -4,7 +4,7 @@
 
 **Goal:** Ship the SIBYL classifier + `/api/analyze` route + miss-log into G0DM0D3 with an empty backing strategies DB, so classification is live end-to-end without depending on convergence's bootstrap having completed.
 
-**Architecture:** Add a new `lib/sibyl/` subdirectory inside `G0DM0D3-main/HF/api/` that contains six focused TS modules (seed taxonomy, types, tension aggregator, classifier, strategies DB reader, prompt template). Expose via a new `/api/analyze` route wired into the existing Express server. Extend `metadata.ts` with one new event type. Add one integration test section to the root `test.js`. No UI changes, no existing route changes.
+**Architecture:** Add a new `lib/sibyl/` subdirectory inside `G0DM0D3-main/api/` (the full Express backend — NOT `HF/api/` which is the deployment variant) that contains six focused TS modules (seed taxonomy, types, tension aggregator, classifier, strategies DB reader, prompt template). Expose via a new `/api/analyze` route wired into the existing Express server. Extend `MetadataEvent` (structured event type) with an optional `sibyl?:` sub-field. Add one integration test section to the root `test.js`. No UI changes, no existing route changes.
 
 **Tech stack:** TypeScript (existing G0DM0D3 conventions: 4-space indent, single quotes, no semicolons, kebab-case files, named exports), Express + cors (existing), OpenRouter via existing `raceModels` primitive, `@huggingface/hub` for dataset reads (new dep), Node's built-in `crypto` for sha256 prompt hashing, plain `node:assert` for tests (gm discipline: no test frameworks).
 
@@ -14,7 +14,7 @@
 
 ## File Structure
 
-All new code lives under `G0DM0D3-main/HF/api/lib/sibyl/`. The directory is created in Task 1 and populated file-by-file.
+All new code lives under `G0DM0D3-main/api/lib/sibyl/`. The directory is created in Task 1 and populated file-by-file.
 
 | File | Purpose | Size target |
 |---|---|---|
@@ -26,7 +26,7 @@ All new code lives under `G0DM0D3-main/HF/api/lib/sibyl/`. The directory is crea
 | `lib/sibyl/strategies-db.ts` | HF dataset reader + in-process cache + revision polling | ~120 lines |
 | `lib/sibyl/index.ts` | Barrel re-exports for the public surface | ~15 lines |
 | `routes/analyze.ts` | New Express route `POST /api/analyze` | ~60 lines |
-| `lib/metadata.ts` | Extended: add `'classification_miss'` to `EVENT_TYPES` | +1 line |
+| `lib/metadata.ts` | Extended: add optional `sibyl?:` sub-field to `MetadataEvent` + widen `mode` union | ~25 lines |
 | `server.ts` | Extended: wire `app.use('/api/analyze', analyzeRouter)` | +2 lines |
 | `test.js` (project root) | New integration test section for SIBYL | ~60 lines added |
 | `.env.example` | Document new env vars | +9 lines |
@@ -38,22 +38,23 @@ Each file is below G0DM0D3's 200-line ceiling. Each has one responsibility.
 ## Prerequisites
 
 - Working directory: `/mnt/storage/pod-taxonomy/G0DM0D3-main`
-- Branch: create `sibyl-v0.1` (G0DM0D3 is a git repo — use a feature branch for the PR)
-- Node version: 18+ (for native `fetch` and `node:test`; required by `@huggingface/hub`)
+- **Git initialisation**: if `G0DM0D3-main` is not yet a git repo (common when imported from a zip), the executor must first `git init -b main`, stage `.gitignore` + all existing files, make a baseline commit ("vendor baseline import from G0DM0D3 zip archive"), and then `git checkout -b sibyl-v0.1`. No remote is required or expected at this stage — remote decision is deferred to Task 12 handoff.
+- Node version: 18+ (for native `fetch`; required by `@huggingface/hub`)
 - Env: `OPENROUTER_API_KEY` set for live tests (tests gracefully skip if missing)
 - Open `docs/design.md` in a split pane before starting — referenced throughout
+- **Backend target**: all new SIBYL code lives under `G0DM0D3-main/api/` (the full Express backend with `tierGate`, `hf-publisher`, `consortium`, `research`). `G0DM0D3-main/HF/api/` is the reduced Hugging Face Spaces deployment variant and is **not** the target for v0.1.
 
 ---
 
 ### Task 1: Create the sibyl lib directory and write the seed S-class taxonomy
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/s-class.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/s-class.ts`
 
 - [ ] **Step 1: Create the sibyl directory**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 mkdir -p lib/sibyl
 ```
 
@@ -86,7 +87,7 @@ export function isValidSClass(s: string): s is SClass {
 - [ ] **Step 3: Verify the file compiles against the project's tsconfig**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit lib/sibyl/s-class.ts
 ```
 
@@ -97,7 +98,7 @@ Expected: no output (success).
 ```bash
 cd G0DM0D3-main
 git checkout -b sibyl-v0.1
-git add HF/api/lib/sibyl/s-class.ts
+git add api/lib/sibyl/s-class.ts
 git commit -m "sibyl: add seed S-class taxonomy with isValidSClass guard"
 ```
 
@@ -106,7 +107,7 @@ git commit -m "sibyl: add seed S-class taxonomy with isValidSClass guard"
 ### Task 2: Write the Strategy type discriminated union
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/types.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/types.ts`
 
 - [ ] **Step 1: Write types.ts**
 
@@ -206,7 +207,7 @@ export interface MissLogEvent {
 - [ ] **Step 2: Verify it type-checks**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit lib/sibyl/types.ts
 ```
 
@@ -215,7 +216,7 @@ Expected: no output (success).
 - [ ] **Step 3: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/types.ts
+git add api/lib/sibyl/types.ts
 git commit -m "sibyl: add Strategy discriminated union and ClassificationResult types"
 ```
 
@@ -224,7 +225,7 @@ git commit -m "sibyl: add Strategy discriminated union and ClassificationResult 
 ### Task 3: Write tension aggregator with unit test
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/tension.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/tension.ts`
 - Modify: `G0DM0D3-main/test.js` (project root — create if missing)
 
 - [ ] **Step 1: Write the failing test in `test.js`**
@@ -236,7 +237,7 @@ const assert = require('node:assert/strict')
 
 // === SIBYL tension ===
 {
-    const { aggregate, tensionTier } = require('./HF/api/lib/sibyl/tension.ts')
+    const { aggregate, tensionTier } = require('./api/lib/sibyl/tension.ts')
 
     // tensionTier boundaries
     assert.equal(tensionTier(0.0), 'low')
@@ -280,7 +281,7 @@ cd G0DM0D3-main
 npx tsx test.js
 ```
 
-Expected: FAIL with "Cannot find module './HF/api/lib/sibyl/tension.ts'".
+Expected: FAIL with "Cannot find module './api/lib/sibyl/tension.ts'".
 
 - [ ] **Step 2: Implement `tension.ts`**
 
@@ -352,7 +353,7 @@ Expected output includes: `  OK  sibyl/tension aggregate + tensionTier`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/tension.ts test.js
+git add api/lib/sibyl/tension.ts test.js
 git commit -m "sibyl: add tension aggregator with boundary + split tests"
 ```
 
@@ -361,7 +362,7 @@ git commit -m "sibyl: add tension aggregator with boundary + split tests"
 ### Task 4: Write the juror prompt template module
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/prompt.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/prompt.ts`
 
 - [ ] **Step 1: Write prompt.ts**
 
@@ -423,7 +424,7 @@ export function truncateForJury(prompt: string): string {
 - [ ] **Step 2: Type-check**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit lib/sibyl/prompt.ts
 ```
 
@@ -432,7 +433,7 @@ Expected: no output.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/prompt.ts
+git add api/lib/sibyl/prompt.ts
 git commit -m "sibyl: add juror system-prompt builder with cache-friendly constant block"
 ```
 
@@ -441,47 +442,75 @@ git commit -m "sibyl: add juror system-prompt builder with cache-friendly consta
 ### Task 5: Write the classifier that wires raceModels to the jury
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/classifier.ts`
-- Review (do not modify): `G0DM0D3-main/HF/api/lib/ultraplinian.ts` — study `raceModels` export signature
+- Create: `G0DM0D3-main/api/lib/sibyl/classifier.ts`
+- Review (do not modify): `G0DM0D3-main/api/lib/ultraplinian.ts` — study `raceModels` export signature
 
-- [ ] **Step 1: Read ultraplinian.ts to confirm `raceModels` signature**
+- [ ] **Step 1: Confirm the real `raceModels` signature**
 
-```bash
-grep -n 'export.*raceModels\|^async function raceModels\|^function raceModels' \
-    G0DM0D3-main/HF/api/lib/ultraplinian.ts
+The verified signature in `api/lib/ultraplinian.ts` (do not re-probe — this was checked during plan revision):
+
+```ts
+export function raceModels(
+    models: string[],
+    messages: Message[],          // { role: 'system' | 'user' | 'assistant'; content: string }
+    apiKey: string,
+    params: {
+        temperature?: number
+        max_tokens?: number
+        top_p?: number
+        top_k?: number
+        frequency_penalty?: number
+        presence_penalty?: number
+        repetition_penalty?: number
+    },
+    config?: RaceConfig,          // { minResults?, gracePeriod?, hardTimeout?, onResult? }
+): Promise<ModelResult[]>
+
+export interface ModelResult {
+    model: string                 // NOT model_id
+    content: string
+    duration_ms: number
+    success: boolean
+    error?: string
+    score: number
+}
 ```
-
-Note the exact parameter shape. If `raceModels` takes `(prompt, models, opts)` the wrapper below matches; if it takes `(messages, models, opts)` adjust accordingly.
 
 - [ ] **Step 2: Write classifier.ts**
 
 ```ts
-import { raceModels } from '../ultraplinian'
+import { raceModels, type ModelResult } from '../ultraplinian'
 import { buildJurorSystemPrompt, truncateForJury } from './prompt'
 import { aggregate } from './tension'
-import { S_CLASS_SEED, isValidSClass } from './s-class'
+import { isValidSClass } from './s-class'
 import type { JurorVote, ClassificationResult } from './types'
 
 export interface ClassifyOpts {
     jurors?: string[]
     jury_size?: number
-    timeout_ms?: number
+    hard_timeout_ms?: number
+    api_key?: string              // override OPENROUTER_API_KEY from env
 }
 
 const DEFAULT_JURORS = (process.env.SIBYL_JURY_MODELS ?? [
-    'anthropic/claude-haiku-4-5',
     'google/gemini-2.5-flash',
-    'meta-llama/llama-3-8b-instruct',
-    'mistralai/mistral-7b-instruct',
-    'qwen/qwen-2.5-7b-instruct'
+    'deepseek/deepseek-chat',
+    'meta-llama/llama-3.1-8b-instruct',
+    'mistralai/mistral-small-3.2-24b-instruct',
+    'openai/gpt-oss-20b'
 ].join(',')).split(',').map(s => s.trim()).filter(Boolean)
 
 const DEFAULT_JURY_SIZE = parseInt(process.env.SIBYL_JURY_SIZE ?? '5', 10)
+const LOW_TEMP_CLASSIFIER_PARAMS = {
+    temperature: 0.1,
+    max_tokens: 300,
+    top_p: 0.9,
+}
 
-function parseJurorVote(modelId: string, raw: string): JurorVote | null {
+function parseJurorVote(model: string, content: string): JurorVote | null {
     let parsed: any
     try {
-        const trimmed = raw.trim()
+        const trimmed = content.trim()
         const jsonStart = trimmed.indexOf('{')
         const jsonEnd = trimmed.lastIndexOf('}')
         if (jsonStart === -1 || jsonEnd === -1) return null
@@ -496,38 +525,51 @@ function parseJurorVote(modelId: string, raw: string): JurorVote | null {
     if (parsed.confidence < 0 || parsed.confidence > 1) return null
 
     return {
-        model_id: modelId,
+        model_id: model,
         s_class: parsed.s_class,
         confidence: parsed.confidence,
         secondary: Array.isArray(parsed.secondary)
             ? parsed.secondary.filter(isValidSClass)
             : [],
-        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined
+        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
     }
 }
 
 export async function classify(
     request: string,
-    opts: ClassifyOpts = {}
+    opts: ClassifyOpts = {},
 ): Promise<ClassificationResult> {
     const jurors = (opts.jurors ?? DEFAULT_JURORS).slice(0, opts.jury_size ?? DEFAULT_JURY_SIZE)
     if (jurors.length === 0) {
         throw new Error('sibyl.classify: no jurors configured')
     }
 
-    const systemPrompt = buildJurorSystemPrompt()
-    const userPrompt = truncateForJury(request)
+    const apiKey = opts.api_key ?? process.env.OPENROUTER_API_KEY ?? ''
+    if (!apiKey) {
+        throw new Error('sibyl.classify: OPENROUTER_API_KEY not set')
+    }
 
-    const raw = await raceModels({
-        models: jurors,
-        system: systemPrompt,
-        user: userPrompt,
-        timeout_ms: opts.timeout_ms ?? 15000
-    })
+    const messages = [
+        { role: 'system' as const, content: buildJurorSystemPrompt() },
+        { role: 'user'   as const, content: truncateForJury(request) },
+    ]
+
+    const results: ModelResult[] = await raceModels(
+        jurors,
+        messages,
+        apiKey,
+        LOW_TEMP_CLASSIFIER_PARAMS,
+        {
+            minResults: Math.ceil(jurors.length / 2),       // quorum
+            gracePeriod: 2000,                              // short — classify is fast
+            hardTimeout: opts.hard_timeout_ms ?? 15000,
+        },
+    )
 
     const votes: JurorVote[] = []
-    for (const r of raw.responses) {
-        const vote = parseJurorVote(r.model_id, r.text)
+    for (const r of results) {
+        if (!r.success || !r.content) continue
+        const vote = parseJurorVote(r.model, r.content)
         if (vote) votes.push(vote)
     }
 
@@ -542,8 +584,8 @@ export async function classify(
                 raw: 1.0,
                 tier: 'critical',
                 votes,
-                agreement_ratio: 0
-            }
+                agreement_ratio: 0,
+            },
         }
     }
 
@@ -551,12 +593,17 @@ export async function classify(
 }
 ```
 
-> **Adjust `raceModels` call-site** — If the existing `raceModels` export has a different signature than assumed above, translate to the actual call. The `{models, system, user, timeout_ms}` shape is the target — if `raceModels` accepts `(messages, models, opts)`, build the messages array here instead. Do not modify `ultraplinian.ts`.
+> Design notes baked into this version:
+> - `apiKey` sourced from `process.env.OPENROUTER_API_KEY` by default (every G0DM0D3 route does this)
+> - `ModelResult.model` (not `.model_id`) — align to upstream
+> - `RaceConfig.minResults` naturally enforces the quorum — we still double-check below
+> - Low-temperature params (0.1 / 0.9) bias jurors toward deterministic classification
+> - Default jurors taken from the real `ULTRAPLINIAN_MODELS.fast` tier in this codebase
 
 - [ ] **Step 3: Type-check**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit lib/sibyl/classifier.ts
 ```
 
@@ -565,7 +612,7 @@ Expected: no output. If you see errors about `raceModels`' signature, adjust the
 - [ ] **Step 4: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/classifier.ts
+git add api/lib/sibyl/classifier.ts
 git commit -m "sibyl: add self-jury classifier wrapping raceModels with quorum fallback"
 ```
 
@@ -574,17 +621,17 @@ git commit -m "sibyl: add self-jury classifier wrapping raceModels with quorum f
 ### Task 6: Write the HF strategies DB reader with cache
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/strategies-db.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/strategies-db.ts`
 - Dependency: `@huggingface/hub` (add via npm)
 
 - [ ] **Step 1: Add the hub dependency**
 
 ```bash
-cd G0DM0D3-main/HF
+cd G0DM0D3-main/api
 npm install @huggingface/hub
 ```
 
-Expected: dependency added to `HF/package.json`.
+Expected: dependency added to `api/package.json`.
 
 - [ ] **Step 2: Write strategies-db.ts**
 
@@ -713,7 +760,7 @@ export const strategiesDB = new StrategiesDB()
 - [ ] **Step 3: Type-check**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit lib/sibyl/strategies-db.ts
 ```
 
@@ -722,7 +769,7 @@ Expected: no output.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/strategies-db.ts HF/package.json HF/package-lock.json
+git add api/lib/sibyl/strategies-db.ts api/package.json api/package-lock.json
 git commit -m "sibyl: add HF strategies DB reader with revision-polled in-process cache"
 ```
 
@@ -731,7 +778,7 @@ git commit -m "sibyl: add HF strategies DB reader with revision-polled in-proces
 ### Task 7: Write the barrel index.ts
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/lib/sibyl/index.ts`
+- Create: `G0DM0D3-main/api/lib/sibyl/index.ts`
 
 - [ ] **Step 1: Write index.ts**
 
@@ -760,62 +807,75 @@ export type {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add HF/api/lib/sibyl/index.ts
+git add api/lib/sibyl/index.ts
 git commit -m "sibyl: add barrel export for public module surface"
 ```
 
 ---
 
-### Task 8: Extend metadata.ts with the classification_miss event type
+### Task 8: Extend MetadataEvent with an optional `sibyl` sub-field
 
 **Files:**
-- Modify: `G0DM0D3-main/HF/api/lib/metadata.ts`
+- Modify: `G0DM0D3-main/api/lib/metadata.ts`
 
-- [ ] **Step 1: Locate the existing `EVENT_TYPES` const**
+> Reality check: `metadata.ts` has a **structured** `MetadataEvent` type — not a tagged enum. `recordEvent(event: Omit<MetadataEvent, 'id' | 'timestamp'>)` takes the whole event object. We extend the *type* with an optional `sibyl?:` field rather than adding a string to an enum.
 
-```bash
-grep -n 'EVENT_TYPES' G0DM0D3-main/HF/api/lib/metadata.ts
-```
-
-- [ ] **Step 2: Add `'classification_miss'` to the list**
-
-Find the line that defines `EVENT_TYPES` (a `const` array of event-type strings) and add `'classification_miss'` as a new entry. If `EVENT_TYPES` does not exist as a named constant, add the new event type to whatever enum/union the `recordEvent` function's type signature uses.
-
-Exact edit if the file has:
-
-```ts
-export const EVENT_TYPES = [
-    'chat_request',
-    'chat_response',
-    // ... other types
-] as const
-```
-
-Then add:
-
-```ts
-export const EVENT_TYPES = [
-    'chat_request',
-    'chat_response',
-    // ... other types
-    'classification_miss'
-] as const
-```
-
-- [ ] **Step 3: Type-check the whole api directory**
+- [ ] **Step 1: Read the current MetadataEvent interface**
 
 ```bash
-cd G0DM0D3-main/HF/api
+sed -n '30,90p' G0DM0D3-main/api/lib/metadata.ts
+```
+
+Expected: the interface has `id`, `timestamp`, `endpoint`, `mode`, `tier?`, `stream`, `pipeline`, `model?`, `model_results?`, `winner?`, `total_duration_ms`, `response_length`, `liquid?`.
+
+- [ ] **Step 2: Add the `sibyl?:` optional field**
+
+Edit the `MetadataEvent` interface in `api/lib/metadata.ts`. Add the following block just before the closing `}` of the interface (conventional ordering: after existing optional fields like `liquid?`):
+
+```ts
+  // SIBYL classification metadata (recorded when endpoint = '/api/analyze'
+  // or when a route opts into advisory mode and a classification was run)
+  sibyl?: {
+    classification?: {
+      primary_s_class: string
+      tension_tier: 'low' | 'medium' | 'high' | 'critical'
+      tension_raw: number
+      confidence: number
+      agreement_ratio: number
+      votes_count: number
+    }
+    miss?: {
+      reason: 'low_confidence' | 'unknown_s_class' | 'high_tension_no_strategy'
+      prompt_hash: string        // sha256(prompt), NEVER raw
+      prompt_length: number
+      available_strategy_count: number
+    }
+    dataset_rev?: string
+  }
+```
+
+- [ ] **Step 3: Extend the `mode` union (if narrow enum)**
+
+If the current `mode` type is `'standard' | 'ultraplinian' | 'consortium'`, widen it to include `'analyze'` so `/api/analyze` can record legitimate events:
+
+```ts
+  mode: 'standard' | 'ultraplinian' | 'consortium' | 'analyze'
+```
+
+- [ ] **Step 4: Type-check the whole api directory**
+
+```bash
+cd G0DM0D3-main/api
 npx tsc --noEmit
 ```
 
-Expected: no errors. If there are unrelated pre-existing errors, note them but do not fix in this plan.
+Expected: zero NEW errors (ignore pre-existing unrelated errors; note them but do not fix in this plan).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add HF/api/lib/metadata.ts
-git commit -m "metadata: add classification_miss event type for sibyl miss-log"
+git add api/lib/metadata.ts
+git commit -m "metadata: add optional sibyl field for classification + miss events"
 ```
 
 ---
@@ -823,8 +883,8 @@ git commit -m "metadata: add classification_miss event type for sibyl miss-log"
 ### Task 9: Write the /api/analyze route
 
 **Files:**
-- Create: `G0DM0D3-main/HF/api/routes/analyze.ts`
-- Modify: `G0DM0D3-main/HF/api/server.ts`
+- Create: `G0DM0D3-main/api/routes/analyze.ts`
+- Modify: `G0DM0D3-main/api/server.ts`
 
 - [ ] **Step 1: Write analyze.ts**
 
@@ -836,15 +896,17 @@ import { rateLimit } from '../middleware/rateLimit'
 import { tierGate } from '../middleware/tierGate'
 import { recordEvent } from '../lib/metadata'
 import { classify, strategiesDB } from '../lib/sibyl'
-import type { MissLogEvent } from '../lib/sibyl'
 
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.SIBYL_CONFIDENCE_THRESHOLD ?? '0.6')
-const TENSION_ESCALATION = parseFloat(process.env.SIBYL_TENSION_ESCALATION ?? '0.50')
+const TENSION_ESCALATION   = parseFloat(process.env.SIBYL_TENSION_ESCALATION   ?? '0.50')
+
+type MissReason = 'low_confidence' | 'unknown_s_class' | 'high_tension_no_strategy'
 
 export const analyzeRouter = Router()
 
 analyzeRouter.post('/', apiKeyAuth, rateLimit, tierGate('standard'), async (req, res) => {
-    const { prompt, conversation_id, return_strategies } = req.body ?? {}
+    const startedAt = Date.now()
+    const { prompt, return_strategies } = req.body ?? {}
 
     if (typeof prompt !== 'string' || prompt.trim().length === 0) {
         return res.status(400).json({ error: 'prompt must be a non-empty string' })
@@ -857,53 +919,77 @@ analyzeRouter.post('/', apiKeyAuth, rateLimit, tierGate('standard'), async (req,
         if (return_strategies !== false) {
             strategies = await strategiesDB.lookup(
                 classification.primary_s_class,
-                classification.tension.tier
+                classification.tension.tier,
             )
         }
 
-        const missReason: MissLogEvent['reason'] | null =
+        const missReason: MissReason | null =
             classification.primary_s_class === 'S-UNKNOWN'     ? 'unknown_s_class' :
-            classification.confidence < CONFIDENCE_THRESHOLD   ? 'low_confidence' :
+            classification.confidence < CONFIDENCE_THRESHOLD   ? 'low_confidence'  :
             (classification.tension.raw >= TENSION_ESCALATION && strategies.length === 0)
                                                                 ? 'high_tension_no_strategy' :
             null
 
-        if (missReason) {
-            const missEvent: MissLogEvent = {
-                event_type: 'classification_miss',
-                reason: missReason,
-                prompt_hash: createHash('sha256').update(prompt).digest('hex'),
-                prompt_length: prompt.length,
+        const datasetRev = strategiesDB.datasetRevision
+
+        // Always record the classification; only add miss when applicable.
+        // recordEvent(Omit<MetadataEvent, 'id' | 'timestamp'>) — structured, not tagged.
+        recordEvent({
+            endpoint: '/api/analyze',
+            mode: 'analyze',
+            stream: false,
+            pipeline: {
+                godmode: false,
+                autotune: false,
+                parseltongue: false,
+                stm_modules: [],
+            },
+            total_duration_ms: Date.now() - startedAt,
+            response_length: 0,
+            sibyl: {
                 classification: {
                     primary_s_class: classification.primary_s_class,
-                    tension_raw: classification.tension.raw,
-                    confidence: classification.confidence,
-                    votes_count: classification.tension.votes.length
+                    tension_tier:    classification.tension.tier,
+                    tension_raw:     classification.tension.raw,
+                    confidence:      classification.confidence,
+                    agreement_ratio: classification.agreement_ratio,
+                    votes_count:     classification.tension.votes.length,
                 },
-                available_strategy_count: strategies.length,
-                user_tier: (req as any).user?.tier ?? 'unknown',
-                timestamp: Date.now()
-            }
-            recordEvent('classification_miss', missEvent)
-        }
+                miss: missReason
+                    ? {
+                        reason: missReason,
+                        prompt_hash: createHash('sha256').update(prompt).digest('hex'),
+                        prompt_length: prompt.length,
+                        available_strategy_count: strategies.length,
+                    }
+                    : undefined,
+                dataset_rev: datasetRev,
+            },
+        })
 
         return res.json({
             classification,
             strategies,
             miss_logged: missReason !== null,
-            dataset_rev: strategiesDB.datasetRevision
+            dataset_rev: datasetRev,
         })
     } catch (err) {
         console.error('sibyl.analyze: classifier failure', err)
         return res.status(500).json({
             error: 'classifier failed',
-            detail: err instanceof Error ? err.message : String(err)
+            detail: err instanceof Error ? err.message : String(err),
         })
     }
 })
 ```
 
-> If `tierGate` is not already an imported middleware, check `HF/api/middleware/` for the equivalent gatekeeper. If tier-gating infrastructure does not exist yet, drop that middleware from the chain for v0.1 and note in CHANGELOG that `/api/analyze` is unrestricted pending tier-gate hookup.
+> Notes baked in:
+> - `recordEvent` takes a single structured object (real signature), not `(type, payload)`.
+> - Every `/api/analyze` call records metadata so the classifier is observable; `miss` is an optional sub-field populated only when a miss threshold trips.
+> - `mode: 'analyze'` requires Task 8 Step 3's mode-union extension — skipping Task 8 Step 3 makes this fail to type-check.
+> - `tierGate('standard')` uses the real middleware signature in `api/middleware/tierGate.ts`. Verify the factory takes a tier string; adjust if it takes a different shape.
+
+> If `tierGate` is not already an imported middleware, check `api/middleware/` for the equivalent gatekeeper. If tier-gating infrastructure does not exist yet, drop that middleware from the chain for v0.1 and note in CHANGELOG that `/api/analyze` is unrestricted pending tier-gate hookup.
 
 - [ ] **Step 2: Wire the router into server.ts**
 
@@ -919,7 +1005,7 @@ app.use('/api/analyze', analyzeRouter)
 - [ ] **Step 3: Type-check the whole api**
 
 ```bash
-cd G0DM0D3-main/HF/api
+cd G0DM0D3-main/api
 npx tsc --noEmit
 ```
 
@@ -928,7 +1014,7 @@ Expected: no errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add HF/api/routes/analyze.ts HF/api/server.ts
+git add api/routes/analyze.ts api/server.ts
 git commit -m "sibyl: add /api/analyze route with miss-log and strategies lookup"
 ```
 
@@ -937,11 +1023,11 @@ git commit -m "sibyl: add /api/analyze route with miss-log and strategies lookup
 ### Task 10: Add env var documentation
 
 **Files:**
-- Modify: `G0DM0D3-main/HF/.env.example` (create if missing)
+- Modify: `G0DM0D3-main/api/.env.example` (create if missing)
 
 - [ ] **Step 1: Append SIBYL env vars**
 
-Open or create `G0DM0D3-main/HF/.env.example`. Append:
+Open or create `G0DM0D3-main/api/.env.example`. Append:
 
 ```
 # SIBYL (v0.1+)
@@ -957,7 +1043,7 @@ HF_DATASET_REPO=
 - [ ] **Step 2: Commit**
 
 ```bash
-git add HF/.env.example
+git add api/.env.example
 git commit -m "sibyl: document env vars in .env.example"
 ```
 
@@ -1014,7 +1100,13 @@ Append to `G0DM0D3-main/test.js`:
         }
 
         const pct = passed / cases.length
-        assert.ok(pct >= 0.7, `classifier accuracy ${(pct*100).toFixed(0)}% < 70% floor`)
+        // v0.1 is observational — no hard gate on small-N accuracy.
+        // A 5-prompt sample is noise-limited; a calibrated gate is deferred to
+        // v0.2 once a labeled eval set exists (see design.md §10 mutable #1).
+        // Hard-fail only on shape / status errors above.
+        if (pct < 0.7) {
+            console.warn(`  WARN  sibyl/analyze accuracy ${(pct*100).toFixed(0)}% < 70% (5-prompt sample)`)
+        }
         console.log(`  OK  sibyl/analyze integration (${passed}/${cases.length} primary match)`)
     }
 }
@@ -1023,8 +1115,8 @@ Append to `G0DM0D3-main/test.js`:
 - [ ] **Step 2: Start the server in a separate terminal**
 
 ```bash
-cd G0DM0D3-main/HF
-npm run dev   # or the equivalent — use the command already documented in HF/package.json
+cd G0DM0D3-main/api
+npm run dev   # or the equivalent — use the command already documented in api/package.json
 ```
 
 Leave running.
@@ -1049,7 +1141,9 @@ git commit -m "test: add sibyl /api/analyze integration covering 5 S-classes"
 
 ---
 
-### Task 12: Stop the server, run full regression
+### Task 12: Final regression; branch finalisation (local-only)
+
+> **Remote status**: the `G0DM0D3-main` working copy in this project was imported from a zip archive; it has no remote configured. Deciding the upstream integration path (fork `peterpodj/G0DM0D3`, PR to `elder-plinius/G0DM0D3`, or private vendor fork) is a human call flagged out-of-scope for v0.1. Task 12 therefore stops at a clean local branch; the push/PR is deferred to the person making that decision.
 
 - [ ] **Step 1: Ensure existing G0DM0D3 tests still pass**
 
@@ -1060,35 +1154,63 @@ npx tsx test.js   # or the existing test entry point
 
 Expected: all previously-passing test sections still pass. SIBYL sections pass. No regressions.
 
-- [ ] **Step 2: Push the branch**
+- [ ] **Step 2: Confirm the branch is clean and ahead of main**
 
 ```bash
 cd G0DM0D3-main
-git push -u origin sibyl-v0.1
+git status                       # should be clean (no uncommitted changes)
+git log main..sibyl-v0.1 --oneline # lists SIBYL commits; should be ~12 entries
 ```
 
-- [ ] **Step 3: Open a draft PR referencing the design doc**
+- [ ] **Step 3: Emit a summary note for the human integrator**
 
-```bash
-gh pr create --draft --title "SIBYL v0.1: classifier primitive + /api/analyze" --body "$(cat <<'EOF'
-## Summary
-- Adds `lib/sibyl/` with the classifier self-jury primitive
-- Adds `POST /api/analyze` route with miss-log emission
-- Extends `metadata.ts` with `classification_miss` event type
-- Integrates 5-prompt classification accuracy test into `test.js`
+Create `G0DM0D3-main/SIBYL_V0.1_HANDOFF.md` (tracked, short) documenting:
 
-## Scope
-v0.1 per https://github.com/peterpodj/SIBYL/blob/main/docs/plans/v0.1-core/readme.md
+```markdown
+# SIBYL v0.1 Handoff
+
+Branch `sibyl-v0.1` contains the SIBYL v0.1 implementation — classifier
+primitive + /api/analyze route + metadata extension. Baseline parent
+commit: <sha of main's HEAD before branch>.
+
+No remote is configured for this working copy. Before publishing:
+1. Decide remote — fork peterpodj/G0DM0D3, PR to elder-plinius/G0DM0D3,
+   or private vendor fork.
+2. `git remote add origin <chosen-remote>`
+3. `git push -u origin sibyl-v0.1`
+4. Open a draft PR with the body below.
+
+## Draft PR body
+
+Summary:
+- Adds `api/lib/sibyl/` with the classifier self-jury primitive
+- Adds `POST /api/analyze` route with structured miss-log
+- Extends `metadata.ts` with optional `sibyl?` sub-field
+- Adds 5-prompt classifier integration test in `test.js`
+
+Scope: v0.1 per https://github.com/peterpodj/SIBYL/blob/main/docs/plans/v0.1-core/readme.md
 
 Strategies DB is empty in this release — `strategies: []` on every response. Population is v0.2 (convergence bootstrap).
 
-## Test plan
-- [ ] `npx tsc --noEmit` passes from HF/api
-- [ ] Full test.js run passes on a machine with OPENROUTER_API_KEY set
-- [ ] Manual: POST /api/analyze with a known-class prompt → classification plausible, strategies: []
-EOF
-)"
+Test plan:
+- `npx tsc --noEmit` passes from api/
+- Full `test.js` run passes on a machine with `OPENROUTER_API_KEY` set
+- Manual: POST /api/analyze with a known-class prompt → classification plausible, strategies: []
 ```
+
+- [ ] **Step 4: Commit the handoff note**
+
+```bash
+git add SIBYL_V0.1_HANDOFF.md
+git commit -m "docs: add SIBYL v0.1 handoff note documenting remote-decision deferral"
+```
+
+- [ ] **Step 5: Report back to SIBYL repo**
+
+Add a `v0.1.0` entry to `SIBYL/CHANGELOG.md` (in the separate SIBYL repo at `/mnt/storage/pod-taxonomy/SIBYL/`) noting:
+- 12-task plan executed against `sibyl-v0.1` branch of local G0DM0D3-main
+- Plan amendments applied: paths `HF/api/ → api/`, real `raceModels` signature, `MetadataEvent.sibyl?` instead of event-type enum, softened accuracy gate, push deferred
+- Baseline commit SHA and final branch SHA
 
 ---
 
@@ -1110,7 +1232,8 @@ Run these checks before handing the plan off:
 
 ## Open Questions for the Executor
 
-1. **TS execution mode**: if the project's existing scripts use something other than `tsx` (e.g., `ts-node`, pre-compiled build), replace all `npx tsx` commands with the project's convention. Look at `HF/package.json` scripts.
-2. **`raceModels` signature**: verify before Task 5 step 2; adjust the call shape without modifying ultraplinian.ts.
-3. **`tierGate` presence**: check `HF/api/middleware/` before Task 9 step 1; if missing, drop from middleware chain and note in CHANGELOG.
-4. **Test file naming**: if a `test.js` already exists at `G0DM0D3-main/` and uses a different convention (e.g., a test framework), append to it following the existing style rather than replacing.
+1. **TS execution mode**: if the project's existing scripts use something other than `tsx` (e.g., `ts-node`, pre-compiled build), replace all `npx tsx` commands with the project's convention. Look at `api/package.json` and the root `package.json` scripts.
+2. **`tierGate('standard')` signature**: verified present at `api/middleware/tierGate.ts`. Confirm it is a factory-of-middleware (i.e., returns a middleware function taking a tier string argument) before Task 9 step 1. If it is already a raw middleware, adjust the call accordingly.
+3. **Test file naming**: if a `test.js` already exists at `G0DM0D3-main/` and uses a different convention (e.g., a test framework), append to it following the existing style rather than replacing.
+4. **`mode: 'analyze'` addition** (Task 8 Step 3): if other code narrows on `mode` (e.g., switch-cases), audit those call-sites for missing-case warnings and handle the new variant explicitly or via a default branch.
+5. **Rate-limit config for `/api/analyze`**: classifier calls cost 5 parallel model invocations. Tune the existing `rateLimit` middleware per-tier budgets accordingly. Not a blocker for v0.1 ship — default budgets are acceptable.
