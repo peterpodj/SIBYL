@@ -34,6 +34,18 @@ mapping-to-reality adjustments that should be back-ported
 to the design doc (§3 architecture + §8.1 route spec) in a
 follow-up patch.
 
+### Live E2E run against forked G0DM0D3
+
+Forked `elder-plinius/G0DM0D3` → `peterpodj/G0DM0D3`, rebased `sibyl-v0.1` onto the fork's real upstream main (so the branch carries SIBYL commits without the local zip-baseline noise), and pushed.
+
+PR: https://github.com/peterpodj/G0DM0D3/pull/1
+
+Two additional fixes surfaced during E2E testing (commit `c72c26c` on `sibyl-v0.1`):
+- `api/routes/research.ts` — fixed pre-existing `path-to-regexp` v8 incompatibility blocking server startup
+- `api/routes/analyze.ts` — switched gate from `tierGate('research:read')` (Pro+) to `tierGate('ultraplinian:fast')` (all tiers); semantically correct since SIBYL uses FAST-tier juror models
+
+Pipeline validated end-to-end against a live local server; classifier accuracy remains unmeasured because the OpenRouter test account had zero credits (HTTP 402 from upstream). The 0-vote fallback fires correctly per spec, confirming the integration is intact.
+
 ### File inventory added on `sibyl-v0.1`
 
 - `api/lib/sibyl/{s-class,types,tension,prompt,classifier,strategies-db,index}.ts`
