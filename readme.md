@@ -4,7 +4,7 @@
 
 SIBYL is a classifier-and-strategy-lookup service for LLM interaction. It reads an incoming user request, consults a panel of lightweight language models ("the jury"), scores their disagreement as a **tension metric**, and returns ranked interaction strategies — prompt templates, model+prompt combos, or full multi-stage pipelines — drawn from a research-authored dataset.
 
-The strategy dataset is built offline by the [convergence-investigation](https://github.com/peterpodj/convergence-investigation-praxis) research methodology over a corpus of published system prompts, jailbreak archives, and red-team literature. Misses — requests the classifier cannot confidently place — are logged as coverage gaps and become the input to the next convergence re-investigation.
+The strategy dataset is built offline by the [convergence-investigation]((https://github.com/peterpodj/convergence)) research methodology over a corpus of published system prompts, jailbreak archives, and red-team literature. Misses — requests the classifier cannot confidently place — are logged as coverage gaps and become the input to the next convergence re-investigation.
 
 ## Status
 
